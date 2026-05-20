@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>九州農業レイヤーマップ</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  html,body{height:100%;margin:0;font-family:"Yu Gothic","Meiryo",sans-serif;background:#0f172a;color:#f8fafc;}
+  .app{display:grid;grid-template-columns:430px 1fr;height:100vh;}
+  aside{padding:18px;background:#111827;border-right:1px solid #334155;overflow:auto;}
+  #map{height:100vh;width:100%;background:#e5e7eb;}
+  h1{font-size:22px;margin:0 0 8px;line-height:1.25;}
+  .sub{font-size:13px;color:#cbd5e1;line-height:1.6;margin-bottom:12px;}
+  .policy{font-size:13px;line-height:1.65;background:rgba(56,189,248,.10);border:1px solid rgba(56,189,248,.38);border-radius:14px;padding:10px 12px;margin:10px 0;}
+  .q{background:rgba(245,158,11,.13);border:1px solid rgba(245,158,11,.45);border-radius:14px;padding:12px;margin:12px 0;}
+  .q b{color:#fde68a;font-size:13px;} .q div{font-size:17px;font-weight:800;line-height:1.45;margin-top:5px;}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0;}
+  button{border:1px solid #334155;background:#1f2937;color:#f8fafc;border-radius:12px;padding:10px 8px;font-weight:800;cursor:pointer;}
+  button:hover{background:#263449;} button.primary{background:#f59e0b;color:#111827;border-color:#f59e0b;}
+  .box{background:rgba(255,255,255,.045);border:1px solid #334155;border-radius:16px;padding:12px;margin:12px 0;}
+  label{display:flex;gap:9px;align-items:flex-start;padding:9px 8px;border-radius:10px;cursor:pointer;font-size:14px;line-height:1.35;}
+  label:hover{background:rgba(255,255,255,.06);}
+  input{transform:scale(1.15);margin-top:2px;}
+  .hint{font-size:12px;color:#cbd5e1;line-height:1.6;margin-top:8px;}
+  .step{border-left:3px solid #475569;padding:7px 0 7px 10px;color:#cbd5e1;font-size:13px;line-height:1.55;}
+  .step strong{color:#fff;}
+  .small{font-size:12px;color:#94a3b8;line-height:1.6;}
+  .regionLabel,.mapLabel,.prodLabel,.pointLabel{display:inline-block;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.28);white-space:nowrap;color:#0f172a;font-weight:900;}
+  .regionLabel{border-radius:999px;padding:4px 8px;font-size:12px;background:#ffffff;}
+  .mapLabel{border-radius:999px;padding:4px 8px;font-size:12px;}
+  .prodLabel{border-radius:12px;padding:5px 8px;font-size:12px;background:#fecdd3;}
+  .pointLabel{border-radius:999px;padding:4px 8px;font-size:12px;background:#fee2e2;}
+  .nature{background:#bbf7d0;} .idea{background:#fde68a;}
+  .popup h3{margin:0 0 6px;font-size:16px;color:#111827;}
+  .popup p{margin:0;color:#111827;font-size:13px;line-height:1.55;}
+  .flow{margin-top:8px;padding:8px;background:#f8fafc;border-radius:8px;color:#0f172a;font-weight:800;line-height:1.45;}
+  .leaflet-popup-content-wrapper{border-radius:14px;}
+  @media(max-width:850px){.app{grid-template-columns:1fr;height:auto;}#map{height:62vh;}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <h1>九州農業レイヤーマップ</h1>
+  <div class="sub">九州地方の自然環境と、人々の工夫、農業・漁業の特色をレイヤーで重ねて確認する教材です。</div>
+
+  <div class="policy">
+    <strong>使い方</strong><br>
+    まず「地形・場所」を確認し、次に「自然条件」「人々の工夫」「産物」を順に重ねます。
+    どの地域で、どの自然環境を生かし、どのような農業・漁業が行われているのかを考えるための地図です。
+  </div>
+
+  <div class="q"><b>本時の問い</b><div>九州地方では、なぜ地域によって行われる農業・漁業が違うのだろうか。</div></div>
+
+  <div class="btns">
+    <button class="primary" onclick="nextStep()">次のレイヤーを表示</button>
+    <button onclick="resetLayers()">リセット</button>
+    <button onclick="showAll()">全部表示</button>
+    <button onclick="focusKyushu()">九州全体へ戻る</button>
+    <button onclick="toggleHillshade()">陰影起伏図 ON/OFF</button>
+    <button onclick="toggleBase()">標準/淡色 切替</button>
+    <button onclick="focusSouthwestIslands()">南西諸島へ移動</button>
+    <button onclick="focusMainAndSouth()">九州+南西諸島を見る</button>
+  </div>
+
+  <div class="box">
+    <div style="font-weight:900;margin-bottom:8px;">表示するレイヤー <span id="stepLabel">Step 0</span></div>
+    <label><input type="checkbox" id="toggleRegions" onchange="syncLayers()"> <span><strong>1 地形・場所</strong><br>平野・海・山地・火山・シラス台地・南西諸島</span></label>
+    <label><input type="checkbox" id="toggleNature" onchange="syncLayers()"> <span><strong>2 自然条件</strong><br>平らな土地、干潟、水をためにくい土地、温暖、亜熱帯など</span></label>
+    <label><input type="checkbox" id="toggleIdeas" onchange="syncLayers()"> <span><strong>3 人々の工夫</strong><br>二毛作、促成栽培、畜産、のり養殖、ブランド化、南西諸島の畑作など</span></label>
+    <label><input type="checkbox" id="toggleProducts" onchange="syncLayers()"> <span><strong>4 産物</strong><br>米・麦・いちご、のり、野菜、茶、黒豚・黒牛、さとうきびなど</span></label>
+    <div class="hint">地形確認時は陰影起伏図ONがおすすめです。南西諸島は「南西諸島へ移動」で確認できます。</div>
+  </div>
+
+  <div class="box">
+    <div class="step"><strong>① 地形・場所</strong><br>平野・有明海・山地・火山・シラス台地・南西諸島の位置関係を見る。</div>
+    <div class="step"><strong>② 自然条件</strong><br>平らな土地、干潟、温暖、水もちの悪い台地、亜熱帯などを重ねる。</div>
+    <div class="step"><strong>③ 人々の工夫</strong><br>二毛作・のり養殖・促成栽培・畑作・畜産などを重ねる。</div>
+    <div class="step"><strong>④ 産物</strong><br>最後に「なぜその地域でその農業・漁業なのか」を説明する。</div>
+  </div>
+
+  <div class="box">
+    <div class="small">※平野・台地・山地の範囲は、授業で読み取りやすくするための教育用近似範囲です。境界を暗記するためではなく、自然環境と人々の工夫の関係を考えるために使います。</div>
+  </div>
+</aside>
+<main><div id="map"></div></main>
+</div>
+
+<script>
+const REGIONS = [{"id": "fukuoka_plain", "name": "福岡平野", "type": "plain", "label": [130.46, 33.55], "coords": [[130.24, 33.53], [130.34, 33.65], [130.5, 33.66], [130.62, 33.58], [130.56, 33.47], [130.4, 33.44], [130.27, 33.47], [130.24, 33.53]], "text": "福岡市周辺に広がる平野。九州北部の都市・交通・農業を考える際の基礎になる場所です。", "flow": "平野 → 人口・都市・農業が集まりやすい"}, {"id": "chikushi_plain", "name": "筑紫平野", "type": "plain", "label": [130.69, 33.25], "coords": [[130.26, 33.22], [130.4, 33.32], [130.58, 33.35], [130.76, 33.31], [130.86, 33.21], [130.78, 33.09], [130.6, 33.04], [130.42, 33.07], [130.29, 33.13], [130.26, 33.22]], "text": "筑後川流域を中心とする平野。稲作・二毛作・園芸農業と関係します。", "flow": "平野 + 川の水 → 稲作・二毛作・園芸農業"}, {"id": "ariake_sea", "name": "有明海", "type": "sea", "label": [130.21, 32.78], "coords": [[130.0, 33.04], [130.17, 33.03], [130.36, 32.98], [130.51, 32.86], [130.62, 32.69], [130.6, 32.52], [130.47, 32.42], [130.27, 32.38], [130.1, 32.44], [129.99, 32.62], [129.96, 32.83], [130.0, 33.04]], "text": "干潟・遠浅・潮の満ち引きが見られる海域。のり養殖と関係します。", "flow": "干潟・潮の満ち引き → のり養殖"}, {"id": "kumamoto_plain", "name": "熊本平野", "type": "plain", "label": [130.75, 32.6], "coords": [[130.44, 32.83], [130.55, 32.94], [130.72, 32.95], [130.88, 32.86], [130.94, 32.72], [130.88, 32.59], [130.7, 32.52], [130.52, 32.56], [130.41, 32.68], [130.44, 32.83]], "text": "熊本市周辺に広がる平野。温暖な気候や園芸農業と関係します。", "flow": "平野 + 温暖 → トマト・すいかなど"}, {"id": "miyazaki_plain", "name": "宮崎平野", "type": "plain", "label": [131.67, 31.82], "coords": [[131.2, 32.18], [131.38, 32.2], [131.55, 32.1], [131.68, 31.9], [131.66, 31.68], [131.52, 31.5], [131.34, 31.48], [131.18, 31.63], [131.1, 31.84], [131.12, 32.04], [131.2, 32.18]], "text": "宮崎市周辺から海岸沿いに広がる平野。温暖さを生かした促成栽培と関係します。", "flow": "温暖 + 平野 + ハウス → 促成栽培"}, {"id": "chikushi_mountains", "name": "筑紫山地", "type": "mountain", "label": [130.9, 33.43], "coords": [[130.35, 33.42], [130.55, 33.52], [130.83, 33.52], [131.02, 33.43], [130.95, 33.3], [130.72, 33.27], [130.48, 33.3], [130.35, 33.42]], "text": "九州北部の山地。筑紫平野や周辺の地形との位置関係を確認します。", "flow": "山地と平野 → 地形の違いを考える手がかり"}, {"id": "kyushu_mountains", "name": "九州山地", "type": "mountain", "label": [131.55, 32.22], "coords": [[130.98, 32.75], [131.14, 32.88], [131.34, 32.84], [131.52, 32.66], [131.58, 32.43], [131.5, 32.22], [131.33, 32.03], [131.12, 31.98], [130.96, 32.13], [130.88, 32.35], [130.89, 32.57], [130.98, 32.75]], "text": "九州中央部の山地。範囲を前版よりしぼり、中央部の山地として調整しました。森林利用、しいたけ、焼畑などと関係します。", "flow": "山地・森林 → 山地に合った農業"}, {"id": "shirasu_kirishima", "name": "シラス台地", "type": "plateau", "label": [130.73, 31.68], "coords": [[130.39, 31.86], [130.62, 31.97], [130.89, 31.91], [131.06, 31.73], [131.01, 31.51], [130.77, 31.4], [130.5, 31.47], [130.33, 31.66], [130.39, 31.86]], "text": "鹿児島湾北部から大隅半島北部にかけて見られる火山灰由来の台地。水もちの悪さと農業の工夫を考えます。", "flow": "火山灰由来の土地 → 畑作・畜産・ブランド化"}, {"id": "nansei_islands", "name": "南西諸島", "type": "island", "label": [127.83, 26.31], "coords": [[127.55, 26.6], [127.82, 26.72], [128.05, 26.58], [128.12, 26.32], [127.92, 26.12], [127.63, 26.18], [127.5, 26.38], [127.55, 26.6]], "text": "沖縄を中心とする南西諸島。亜熱帯の気候を生かした農業が行われます。必要に応じてボタンで移動して確認します。", "flow": "亜熱帯の気候 → 南西諸島らしい農業"}];
+const POINTS = [{"name": "雲仙岳（普賢岳）", "type": "volcano", "lon": 130.3, "lat": 32.76, "labelLon": 130.1, "labelLat": 32.63, "text": "有明海の西側に位置する火山。九州の火山の多さを確認する地点です。", "flow": "火山 → 災害と恵み"}, {"name": "阿蘇山", "type": "volcano", "lon": 131.1, "lat": 32.88, "labelLon": 131.06, "labelLat": 32.62, "text": "巨大なカルデラをもつ火山。九州山地や火山地形の確認に使います。", "flow": "火山 → カルデラ・観光・防災"}, {"name": "桜島", "type": "volcano", "lon": 130.66, "lat": 31.59, "labelLon": 130.57, "labelLat": 31.5, "text": "鹿児島湾に位置する活火山。火山灰・防災・観光と関係します。", "flow": "火山 → 火山灰への備え・観光"}, {"name": "屋久島", "type": "island", "lon": 130.53, "lat": 30.36, "labelLon": 130.47, "labelLat": 30.18, "text": "九州南方の島。九州地方の海や島の広がりを確認する補助地点です。", "flow": "島・自然環境 → 観光・自然保護"}, {"name": "種子島", "type": "island", "lon": 130.98, "lat": 30.62, "labelLon": 131.05, "labelLat": 30.47, "text": "九州南方の島。南西諸島方面への広がりを確認する補助地点です。", "flow": "島・海 → 交通・産業の広がり"}, {"name": "沖縄島付近", "type": "island", "lon": 127.75, "lat": 26.3, "labelLon": 127.66, "labelLat": 26.15, "text": "南西諸島の中心として確認する地点。さとうきびやパイナップルなどの農業とつながります。", "flow": "亜熱帯 + 島 → 南西諸島の農業"}];
+const NATURE = [{"name": "平らな土地", "targetLon": 130.58, "targetLat": 33.2, "labelLon": 130.87, "labelLat": 33.16, "text": "筑紫平野では、水田や畑として土地を使いやすい。", "flow": "平野 → 稲作・二毛作・園芸農業"}, {"name": "干潟・遠浅", "targetLon": 130.17, "targetLat": 32.58, "labelLon": 129.94, "labelLat": 32.48, "text": "有明海では干潟や潮の満ち引きが見られる。", "flow": "干潟・潮の満ち引き → のり養殖"}, {"name": "温暖な平野", "targetLon": 130.75, "targetLat": 32.67, "labelLon": 131.03, "labelLat": 32.62, "text": "熊本平野では温暖な気候と平野を生かした園芸農業が行われる。", "flow": "温暖 + 平野 → トマト・すいかなど"}, {"name": "温暖・日照", "targetLon": 131.53, "targetLat": 31.83, "labelLon": 131.8, "labelLat": 31.7, "text": "宮崎平野では温暖さや日照を生かした野菜栽培と関係する。", "flow": "温暖 + 日照 → 早く育てる工夫"}, {"name": "水をためにくい土地", "targetLon": 130.61, "targetLat": 31.77, "labelLon": 130.16, "labelLat": 31.82, "text": "シラス台地は水もちが悪く、稲作には不向きな面がある。", "flow": "不利な条件 → 畑作・畜産へ"}, {"name": "山がちな地形・森林", "targetLon": 131.33, "targetLat": 32.42, "labelLon": 131.84, "labelLat": 32.45, "text": "平地が少ないため、森林や山地を生かした農業が行われる。", "flow": "山地・森林 → しいたけ・焼畑"}, {"name": "亜熱帯・高温", "targetLon": 127.84, "targetLat": 26.33, "labelLon": 128.37, "labelLat": 26.48, "text": "南西諸島は年中あたたかく、亜熱帯の気候が見られる。", "flow": "亜熱帯の気候 → さとうきび・パイナップル"}];
+const IDEAS = [{"name": "二毛作", "targetLon": 130.46, "targetLat": 33.14, "labelLon": 130.77, "labelLat": 33.02, "text": "米のあとに麦を作るなど、季節を生かして土地を使う。", "flow": "平野 + 比較的温暖 → 二毛作"}, {"name": "ハウス栽培", "targetLon": 130.73, "targetLat": 33.33, "labelLon": 131.01, "labelLat": 33.32, "text": "ビニールハウスを使い、いちごなどを育てる。", "flow": "平野 + ハウス → いちご"}, {"name": "のり養殖", "targetLon": 130.05, "targetLat": 32.5, "labelLon": 129.86, "labelLat": 32.42, "text": "干潟や潮の満ち引きを生かしてのりを育てる。", "flow": "有明海の自然条件 → のり養殖"}, {"name": "畑作・畜産", "targetLon": 130.5, "targetLat": 31.69, "labelLon": 130.15, "labelLat": 31.55, "text": "水をためにくい土地に合わせて、さつまいも・茶・飼料作物・畜産などが発達した。", "flow": "シラス台地 → 畑作・畜産"}, {"name": "ブランド化", "targetLon": 130.98, "targetLat": 31.64, "labelLon": 131.3, "labelLat": 31.5, "text": "黒豚・黒牛・茶など、地域の特色を強みにして価値を高める。", "flow": "地域の特色 + 品質 → ブランド"}, {"name": "促成栽培", "targetLon": 131.53, "targetLat": 31.71, "labelLon": 131.92, "labelLat": 31.46, "text": "温暖な気候とビニールハウスを生かし、野菜を早い時期に出荷する。", "flow": "温暖 + ハウス + 早く出荷 → 促成栽培"}, {"name": "森林利用・焼畑", "targetLon": 131.47, "targetLat": 32.18, "labelLon": 131.93, "labelLat": 32.09, "text": "山地や森林を生かし、自然環境を維持しながら農業を行う。", "flow": "山地 + 森林 → しいたけ・焼畑"}, {"name": "亜熱帯を生かす農業", "targetLon": 127.98, "targetLat": 26.28, "labelLon": 128.66, "labelLat": 26.16, "text": "南西諸島では、あたたかい気候を生かして畑作中心の農業が行われる。", "flow": "亜熱帯 + 島の農業 → さとうきび栽培"}];
+const PRODUCTS = [{"name": "米・麦", "targetLon": 130.4, "targetLat": 33.32, "labelLon": 130.08, "labelLat": 33.37, "text": "筑紫平野などでは、平らな土地を生かした稲作や、米のあとに麦を作る二毛作が行われる。", "flow": "平野 → 稲作 → 二毛作"}, {"name": "いちご", "targetLon": 130.74, "targetLat": 33.36, "labelLon": 130.99, "labelLat": 33.43, "text": "北部の平野では、比較的温暖な気候やビニールハウスを生かした園芸農業が行われる。", "flow": "平野 + 温暖 + ハウス → いちご"}, {"name": "有明海のり", "targetLon": 130.07, "targetLat": 32.51, "labelLon": 129.98, "labelLat": 32.26, "text": "有明海では、干潟や潮の満ち引きを生かしてのり養殖が行われる。", "flow": "干潟・遠浅 → のり養殖 → 有明海のり"}, {"name": "トマト・すいか", "targetLon": 130.73, "targetLat": 32.66, "labelLon": 130.96, "labelLat": 32.48, "text": "熊本平野では、温暖な気候や平野を生かして、トマト・すいかなどの栽培が行われる。", "flow": "温暖 + 平野 + 栽培技術 → トマト・すいか"}, {"name": "きゅうり・ピーマン", "targetLon": 131.56, "targetLat": 31.83, "labelLon": 131.97, "labelLat": 31.79, "text": "宮崎平野では、温暖な気候とビニールハウスによる促成栽培を生かして、きゅうり・ピーマンなどが生産される。", "flow": "温暖 + ハウス + 促成栽培 → きゅうり・ピーマン"}, {"name": "さつまいも", "targetLon": 130.38, "targetLat": 31.33, "labelLon": 130.0, "labelLat": 31.12, "text": "南九州では、水をためにくいシラス台地に合わせた畑作が発達した。", "flow": "シラス台地 → 畑作 → さつまいも"}, {"name": "茶", "targetLon": 130.67, "targetLat": 31.16, "labelLon": 130.7, "labelLat": 30.99, "text": "南九州では、温暖な気候や畑作地を生かして茶の栽培も行われる。", "flow": "温暖 + 畑作地 → 茶"}, {"name": "黒豚・黒牛", "targetLon": 130.95, "targetLat": 31.54, "labelLon": 131.3, "labelLat": 31.37, "text": "南九州では畜産が発達し、黒豚・黒牛などのブランドにもつながっている。", "flow": "畜産 + ブランド化 → 黒豚・黒牛"}, {"name": "しいたけ", "targetLon": 131.47, "targetLat": 32.53, "labelLon": 131.92, "labelLat": 32.64, "text": "九州山地などの山間部では、森林や山地を生かしたしいたけ栽培などが行われる。", "flow": "山地・森林 → しいたけ"}, {"name": "焼畑", "targetLon": 131.68, "targetLat": 31.96, "labelLon": 131.91, "labelLat": 31.68, "text": "山間部では、自然環境を維持しながら続けられてきた焼畑農業も見られる。", "flow": "山地 + 伝統的な工夫 → 焼畑"}, {"name": "さとうきび", "targetLon": 127.73, "targetLat": 26.18, "labelLon": 127.15, "labelLat": 25.93, "text": "南西諸島では、年中あたたかい気候を生かして、さとうきびが栽培される。", "flow": "亜熱帯の気候 → さとうきび"}, {"name": "パイナップル", "targetLon": 128.16, "targetLat": 26.1, "labelLon": 128.57, "labelLat": 25.92, "text": "南西諸島では、あたたかい気候を生かしてパイナップルなども育てられる。", "flow": "亜熱帯の気候 → パイナップル"}];
+const COLORS = {"plain": {"stroke": "#16a34a", "fill": "#86efac"}, "sea": {"stroke": "#0284c7", "fill": "#7dd3fc"}, "plateau": {"stroke": "#a16207", "fill": "#fde68a"}, "mountain": {"stroke": "#8b5e3c", "fill": "#c08457"}, "volcano": {"stroke": "#dc2626", "fill": "#fecaca"}, "island": {"stroke": "#334155", "fill": "#e5e7eb"}};
+
+const map = L.map('map', {center:[32.35,130.75], zoom:7, minZoom:5, maxZoom:12});
+
+const pale = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
+  attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>',
+  maxZoom:18
+}).addTo(map);
+
+const std = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
+  attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>',
+  maxZoom:18
+});
+
+const hillshade = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/hillshademap/{z}/{x}/{y}.png', {
+  opacity:0.36,
+  attribution:'<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">陰影起伏図（地理院タイル）</a>',
+  maxZoom:16
+});
+
+function popup(title, text, flow){
+  return `<div class="popup"><h3>${title}</h3><p>${text}</p>${flow ? `<div class="flow">${flow}</div>` : ''}</div>`;
+}
+function divIcon(html, anchor=[40,13]){ return L.divIcon({className:'', html:html, iconSize:null, iconAnchor:anchor}); }
+function regionIcon(text){ return divIcon(`<span class="regionLabel">${text}</span>`); }
+function labelIcon(text, cls){ return divIcon(`<span class="mapLabel ${cls}">${text}</span>`); }
+function productIcon(text){ return divIcon(`<span class="prodLabel">${text}</span>`); }
+function pointIcon(text){ return divIcon(`<span class="pointLabel">${text}</span>`); }
+function coordsToLatLng(coords){ return coords.map(c => [c[1], c[0]]); }
+
+const layers = {
+  regions: L.layerGroup(),
+  nature: L.layerGroup(),
+  ideas: L.layerGroup(),
+  products: L.layerGroup()
+};
+
+REGIONS.forEach(r => {
+  const c = COLORS[r.type] || COLORS.plain;
+  L.polygon(coordsToLatLng(r.coords), {
+    color:c.stroke,
+    weight:2.5,
+    fillColor:c.fill,
+    fillOpacity:r.type === "mountain" ? 0.25 : 0.23,
+    opacity:0.95
+  }).bindPopup(popup(r.name, r.text, r.flow)).addTo(layers.regions);
+
+  L.marker([r.label[1], r.label[0]], {icon:regionIcon(r.name)})
+   .bindPopup(popup(r.name, r.text, r.flow)).addTo(layers.regions);
+});
+
+POINTS.forEach(p => {
+  const c = COLORS[p.type] || COLORS.volcano;
+  const popupHtml = popup(p.name, p.text, p.flow);
+  L.circleMarker([p.lat, p.lon], {
+    radius:p.type === "volcano" ? 7 : 5,
+    color:c.stroke,
+    fillColor:c.fill,
+    fillOpacity:0.95,
+    weight:2
+  }).bindPopup(popupHtml).addTo(layers.regions);
+  const llon = p.labelLon ?? p.lon;
+  const llat = p.labelLat ?? p.lat;
+  if(llon !== p.lon || llat !== p.lat){
+    L.polyline([[p.lat,p.lon],[llat,llon]], {
+      color:'#444', weight:1.8, opacity:0.9
+    }).bindPopup(popupHtml).addTo(layers.regions);
+  }
+  L.marker([llat, llon], {icon:pointIcon(p.name)})
+   .bindPopup(popupHtml).addTo(layers.regions);
+});
+
+function addAnchoredLabel(group, item, iconMaker, color){
+  const tLat = item.targetLat ?? item.lat;
+  const tLon = item.targetLon ?? item.lon;
+  const lLat = item.labelLat ?? item.lat;
+  const lLon = item.labelLon ?? item.lon;
+  const popupHtml = popup(item.name,item.text,item.flow);
+  if(tLat !== lLat || tLon !== lLon){
+    L.polyline([[tLat,tLon],[lLat,lLon]], {
+      color: color,
+      weight: 2,
+      opacity: 0.85,
+      dashArray: '4 4'
+    }).bindPopup(popupHtml).addTo(group);
+    L.circleMarker([tLat,tLon], {
+      radius: 3.5,
+      color: color,
+      fillColor: color,
+      fillOpacity: 1,
+      weight: 1.2
+    }).bindPopup(popupHtml).addTo(group);
+  }
+  L.marker([lLat,lLon], {icon:iconMaker(item.name)})
+    .bindPopup(popupHtml).addTo(group);
+}
+NATURE.forEach(item => addAnchoredLabel(layers.nature, item, t=>labelIcon(t,'nature'), '#16a34a'));
+IDEAS.forEach(item => addAnchoredLabel(layers.ideas, item, t=>labelIcon(t,'idea'), '#a16207'));
+PRODUCTS.forEach(item => addAnchoredLabel(layers.products, item, productIcon, '#be185d'));
+
+let step = 0;
+let baseMode = "pale";
+let hillOn = false;
+
+function syncLayers(){
+  const flags = {
+    regions: document.getElementById('toggleRegions').checked,
+    nature: document.getElementById('toggleNature').checked,
+    ideas: document.getElementById('toggleIdeas').checked,
+    products: document.getElementById('toggleProducts').checked
+  };
+  Object.keys(layers).forEach(k => {
+    if(flags[k]) { if(!map.hasLayer(layers[k])) layers[k].addTo(map); }
+    else { if(map.hasLayer(layers[k])) map.removeLayer(layers[k]); }
+  });
+  const count = Object.values(flags).filter(Boolean).length;
+  document.getElementById('stepLabel').textContent = `表示中 ${count}/4`;
+  bringFront();
+}
+function bringFront(){
+  if(hillOn && map.hasLayer(hillshade)) hillshade.bringToFront();
+  Object.keys(layers).forEach(k => { if(map.hasLayer(layers[k])) layers[k].bringToFront(); });
+}
+function setToggles(r,n,i,p){
+  document.getElementById('toggleRegions').checked = r;
+  document.getElementById('toggleNature').checked = n;
+  document.getElementById('toggleIdeas').checked = i;
+  document.getElementById('toggleProducts').checked = p;
+  syncLayers();
+}
+function nextStep(){
+  step = (step + 1) % 5;
+  if(step===0) setToggles(false,false,false,false);
+  if(step===1) setToggles(true,false,false,false);
+  if(step===2) setToggles(true,true,false,false);
+  if(step===3) setToggles(true,true,true,false);
+  if(step===4) setToggles(true,true,true,true);
+  document.getElementById('stepLabel').textContent = `Step ${step}`;
+}
+function resetLayers(){ step=0; setToggles(false,false,false,false); document.getElementById('stepLabel').textContent='Step 0'; }
+function showAll(){ step=4; setToggles(true,true,true,true); document.getElementById('stepLabel').textContent='Step 4'; }
+function focusKyushu(){ map.setView([32.35,130.75],7); }
+function focusSouthwestIslands(){ map.setView([26.35,127.85],8); }
+function focusMainAndSouth(){ map.fitBounds([[25.7,126.8],[33.9,132.2]]); }
+function toggleHillshade(){
+  if(map.hasLayer(hillshade)){ map.removeLayer(hillshade); hillOn=false; }
+  else{ hillshade.addTo(map); hillOn=true; bringFront(); }
+}
+function toggleBase(){
+  if(baseMode === "pale"){ map.removeLayer(pale); std.addTo(map); baseMode = "std"; }
+  else{ map.removeLayer(std); pale.addTo(map); baseMode = "pale"; }
+  bringFront();
+}
+resetLayers();
+</script>
+</body>
+</html>
